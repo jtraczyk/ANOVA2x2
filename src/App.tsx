@@ -26,7 +26,7 @@ export default function App() {
             <span className="h-6 w-px bg-[#dfe5e8] shrink-0" aria-hidden="true" />
             <div>
               <h1 className="text-sm sm:text-base font-bold tracking-tight text-[#344b57] leading-tight">
-                ANOVA 2 × 2: Procedura Obliczeniowa
+                ANOVA 2 × 2: Procedura obliczeniowa
               </h1>
               <p className="text-[11px] text-[#6d7b83] hidden sm:block">
                 Strategia uczenia się × Długość snu · <em>n</em> = 5 w grupie, <em>N</em> = 20
