@@ -660,6 +660,42 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
     );
   };
 
+  // Separate overlapping horizontal lines that share the same row
+  const horizontalOffsets = (() => {
+    const offsets = new Array<number>(svgLines.length).fill(0);
+    const horizontalEntries = svgLines
+      .map((line, idx) => ({
+        idx,
+        midY: (line.y1 + line.y2) / 2,
+        span: Math.abs(line.x2 - line.x1),
+        isHorizontal: Math.abs(line.y2 - line.y1) < 6 && Math.abs(line.x2 - line.x1) >= 0.5,
+      }))
+      .filter((entry) => entry.isHorizontal);
+
+    const groups: Array<typeof horizontalEntries> = [];
+    for (const entry of horizontalEntries) {
+      const existingGroup = groups.find((g) => Math.abs(g[0].midY - entry.midY) < 8);
+      if (existingGroup) {
+        existingGroup.push(entry);
+      } else {
+        groups.push([entry]);
+      }
+    }
+
+    for (const group of groups) {
+      if (group.length < 2) continue;
+      // Longer span arches gently above the row centerline, shorter span arches gently below
+      group.sort((a, b) => b.span - a.span);
+      group.forEach((entry, pos) => {
+        const tier = Math.floor(pos / 2);
+        const magnitude = 12 + tier * 8;
+        offsets[entry.idx] = pos % 2 === 0 ? -magnitude : magnitude;
+      });
+    }
+
+    return offsets;
+  })();
+
   return (
     <div ref={containerRef} className="relative w-full flex flex-col gap-3 py-1">
       {/* High-visibility SVG Connection Overlay with white halo and robust stroke */}
@@ -668,37 +704,54 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
         style={{ minHeight: '100%' }}
       >
         <defs>
-          <linearGradient id="traceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#344b57" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#ef9421" stopOpacity="0.95" />
-          </linearGradient>
+          {svgLines.map((line, idx) => (
+            <linearGradient
+              key={idx}
+              id={`traceGrad-${idx}`}
+              gradientUnits="userSpaceOnUse"
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+            >
+              <stop offset="0%" stopColor="#344b57" stopOpacity="0.95" />
+              <stop offset="100%" stopColor="#ef9421" stopOpacity="0.95" />
+            </linearGradient>
+          ))}
         </defs>
         {svgLines.map((line, idx) => {
           const dx = line.x2 - line.x1;
           const dy = line.y2 - line.y1;
+          const isSamePoint = Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5;
+          const curveOffset = horizontalOffsets[idx] || 0;
           const cx1 = line.x1 + dx * 0.25;
-          const cy1 = line.y1 + dy * 0.45;
+          const cy1 = line.y1 + dy * 0.45 + curveOffset;
           const cx2 = line.x1 + dx * 0.75;
-          const cy2 = line.y2 - dy * 0.15;
+          const cy2 = line.y2 - dy * 0.15 + curveOffset;
+          const pathD = `M ${line.x1} ${line.y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${line.x2} ${line.y2}`;
 
           return (
             <g key={idx}>
-              {/* White contrast under-stroke halo to ensure high contrast against all cards/borders */}
-              <path
-                d={`M ${line.x1} ${line.y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${line.x2} ${line.y2}`}
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth="4"
-                strokeOpacity="0.9"
-              />
-              {/* Vibrant connection line */}
-              <path
-                d={`M ${line.x1} ${line.y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${line.x2} ${line.y2}`}
-                fill="none"
-                stroke="url(#traceGrad)"
-                strokeWidth="1.8"
-                strokeDasharray="4 2"
-              />
+              {!isSamePoint && (
+                <>
+                  {/* White contrast under-stroke halo to ensure high contrast against all cards/borders */}
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="4"
+                    strokeOpacity="0.9"
+                  />
+                  {/* Vibrant connection line */}
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke={`url(#traceGrad-${idx})`}
+                    strokeWidth="1.8"
+                    strokeDasharray="4 2"
+                  />
+                </>
+              )}
               <circle cx={line.x1} cy={line.y1} r="3" fill="#344b57" stroke="#ffffff" strokeWidth="1.5" />
               <circle cx={line.x2} cy={line.y2} r="3.5" fill="#ef9421" stroke="#ffffff" strokeWidth="1.5" />
             </g>
@@ -1106,9 +1159,9 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           data-trace-id="margA1"
                           className={`p-1.5 transition-all duration-300 font-mono border-b border-[#cfd8dd] ${
                             isSourceHighlighted('margA1')
-                              ? 'bg-[#344b57] text-white font-black ring-2 ring-[#ef9421] shadow-xs'
+                              ? 'bg-[#344b57] text-white font-black ring-2 ring-inset ring-[#ef9421] shadow-xs'
                               : currentStep.highlightedCells.includes('margA')
-                              ? 'bg-[#e3ebef] text-[#253640] font-black ring-2 ring-[#344b57]'
+                              ? 'bg-[#e3ebef] text-[#253640] font-black ring-2 ring-inset ring-[#344b57]'
                               : 'bg-[#f4f7f8] text-[#344b57]'
                           }`}
                         >
@@ -1163,9 +1216,9 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           data-trace-id="margA2"
                           className={`p-1.5 transition-all duration-300 font-mono border-b border-[#cfd8dd] ${
                             isSourceHighlighted('margA2')
-                              ? 'bg-[#344b57] text-white font-black ring-2 ring-[#ef9421] shadow-xs'
+                              ? 'bg-[#344b57] text-white font-black ring-2 ring-inset ring-[#ef9421] shadow-xs'
                               : currentStep.highlightedCells.includes('margA')
-                              ? 'bg-[#e3ebef] text-[#253640] font-black ring-2 ring-[#344b57]'
+                              ? 'bg-[#e3ebef] text-[#253640] font-black ring-2 ring-inset ring-[#344b57]'
                               : 'bg-[#f4f7f8] text-[#344b57]'
                           }`}
                         >
@@ -1196,9 +1249,9 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           data-trace-id="margB1"
                           className={`p-1.5 transition-all duration-300 font-mono border-b border-r border-[#cfd8dd] ${
                             isSourceHighlighted('margB1')
-                              ? 'bg-[#2a7b6f] text-white font-black ring-2 ring-[#84c5ba] shadow-xs'
+                              ? 'bg-[#2a7b6f] text-white font-black ring-2 ring-inset ring-[#84c5ba] shadow-xs'
                               : currentStep.highlightedCells.includes('margB')
-                              ? 'bg-[#d8efe9] text-[#15453d] font-black ring-2 ring-[#2a7b6f]'
+                              ? 'bg-[#d8efe9] text-[#15453d] font-black ring-2 ring-inset ring-[#2a7b6f]'
                               : 'bg-[#f3faf8] text-[#1f5e54]'
                           }`}
                         >
@@ -1222,9 +1275,9 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           data-trace-id="margB2"
                           className={`p-1.5 transition-all duration-300 font-mono border-b border-r border-[#cfd8dd] ${
                             isSourceHighlighted('margB2')
-                              ? 'bg-[#2a7b6f] text-white font-black ring-2 ring-[#84c5ba] shadow-xs'
+                              ? 'bg-[#2a7b6f] text-white font-black ring-2 ring-inset ring-[#84c5ba] shadow-xs'
                               : currentStep.highlightedCells.includes('margB')
-                              ? 'bg-[#d8efe9] text-[#15453d] font-black ring-2 ring-[#2a7b6f]'
+                              ? 'bg-[#d8efe9] text-[#15453d] font-black ring-2 ring-inset ring-[#2a7b6f]'
                               : 'bg-[#f3faf8] text-[#1f5e54]'
                           }`}
                         >
@@ -1250,9 +1303,9 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           data-trace-id="grandMean"
                           className={`p-1.5 transition-all duration-300 font-mono border-b border-[#cfd8dd] ${
                             isSourceHighlighted('grandMean')
-                              ? 'bg-[#e28b1f] text-white font-black ring-2 ring-[#f4cc92] shadow-xs'
+                              ? 'bg-[#e28b1f] text-white font-black ring-2 ring-inset ring-[#f4cc92] shadow-xs'
                               : currentStep.highlightedCells.includes('grandMean')
-                              ? 'bg-[#fde9cb] text-[#7c4305] font-black ring-2 ring-[#ef9421]'
+                              ? 'bg-[#fde9cb] text-[#7c4305] font-black ring-2 ring-inset ring-[#ef9421]'
                               : 'bg-[#fef5e7] text-[#8a4b06] font-bold'
                           }`}
                         >
@@ -1285,7 +1338,11 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           onMouseEnter={() => setTraceHover('table_ssB', ['margB1', 'margB2', 'grandMean'], <><LatexFormula tex="SS_B = 10 \cdot \big[(10{,}50 - 12{,}00)^2 + (13{,}50 - 12{,}00)^2\big] = 45{,}00" /> (ze średnich brzegowych snu)</>)}
                           onMouseLeave={clearTraceHover}
                           className={`p-1 border-r border-[#cfd8dd] cursor-help transition-all ${
-                            currentStep.step >= 5 ? 'text-[#1f5e54] font-bold bg-[#ecf7f4]' : 'text-[#85868c]'
+                            currentStep.highlightedCells.includes('ssB')
+                              ? 'text-[#15453d] font-bold bg-[#d8efe9] ring-2 ring-inset ring-[#2a7b6f]'
+                              : currentStep.step >= 5
+                              ? 'text-[#1f5e54] font-bold bg-[#ecf7f4]'
+                              : 'text-[#85868c]'
                           }`}
                         >
                           {currentStep.step >= 5 ? (
@@ -1299,7 +1356,11 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                           onMouseEnter={() => setTraceHover('table_ssA', ['margA1', 'margA2', 'grandMean'], <><LatexFormula tex="SS_A = 10 \cdot \big[(11{,}00 - 12{,}00)^2 + (13{,}00 - 12{,}00)^2\big] = 20{,}00" /> (ze średnich brzegowych strategii)</>)}
                           onMouseLeave={clearTraceHover}
                           className={`p-1 cursor-help transition-all ${
-                            currentStep.step >= 4 ? 'text-[#253640] font-bold bg-[#e9eff2]' : 'text-[#85868c]'
+                            currentStep.highlightedCells.includes('ssA')
+                              ? 'text-[#253640] font-bold bg-[#e3ebef] ring-2 ring-inset ring-[#344b57]'
+                              : currentStep.step >= 4
+                              ? 'text-[#253640] font-bold bg-[#e9eff2]'
+                              : 'text-[#85868c]'
                           }`}
                         >
                           {currentStep.step >= 4 ? (
@@ -1593,13 +1654,13 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                       </tr>
 
                       {/* Row Total */}
-                      <tr className="bg-[#f4f6f7] font-bold text-[#344b57] border-t-2 border-[#cfd8dd]">
-                        <td className="py-1.5 px-2 font-sans border-r border-[#cfd8dd]">
+                      <tr className="bg-[#f4f6f7] font-bold text-[#344b57]">
+                        <td className="py-1.5 px-2 font-sans border-t border-r border-[#9eb0ba]">
                           Ogółem (Total)
                         </td>
                         <td 
                           data-trace-id="cell_SS_tot"
-                          className="py-1.5 px-1.5 text-right cursor-help border-r border-[#cfd8dd]"
+                          className="py-1.5 px-1.5 text-right cursor-help border-t border-r border-[#9eb0ba]"
                           onMouseEnter={() => setTraceHover('cell_SS_tot', ['cell_SS_A', 'cell_SS_B', 'cell_SS_AxB', 'cell_SS_err'], <LatexFormula tex="SS_{\text{total}} = 20{,}00 + 45{,}00 + 45{,}00 + 40{,}00 = 150{,}00" />)}
                           onMouseLeave={clearTraceHover}
                           title="SS(total) = 150,00"
@@ -1612,17 +1673,17 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                         </td>
                         <td 
                           data-trace-id="cell_df_tot"
-                          className="py-1.5 px-1.5 text-right cursor-help border-r border-[#cfd8dd]"
+                          className="py-1.5 px-1.5 text-right cursor-help border-t border-r border-[#9eb0ba]"
                           onMouseEnter={() => setTraceHover('cell_df_tot', ['cell_df_A', 'cell_df_B', 'cell_df_AxB', 'cell_df_err'], <LatexFormula tex="df_{\text{total}} = 1 + 1 + 1 + 16 = 19" />)}
                           onMouseLeave={clearTraceHover}
                           title="df(total) = 19"
                         >
                           {currentStep.tableProgress.showDF ? '19' : '—'}
                         </td>
-                        <td className="py-1.5 px-1.5 text-right text-[#b5bfc5] border-r border-[#cfd8dd]">—</td>
-                        <td className="py-1.5 px-1.5 text-right text-[#b5bfc5] border-r border-[#cfd8dd]">—</td>
-                        <td className="py-1.5 px-1.5 text-right text-[#b5bfc5] border-r border-[#cfd8dd]">—</td>
-                        <td className="py-1.5 px-2 text-right text-[#b5bfc5]">—</td>
+                        <td className="py-1.5 px-1.5 text-right text-[#b5bfc5] border-t border-r border-[#9eb0ba]">—</td>
+                        <td className="py-1.5 px-1.5 text-right text-[#b5bfc5] border-t border-r border-[#9eb0ba]">—</td>
+                        <td className="py-1.5 px-1.5 text-right text-[#b5bfc5] border-t border-r border-[#9eb0ba]">—</td>
+                        <td className="py-1.5 px-2 text-right text-[#b5bfc5] border-t border-[#9eb0ba]">—</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1760,45 +1821,46 @@ Kluczowy dla hipotezy badawczej efekt interakcji obu czynników okazał się sta
                         <text x="36" y="64" fill="#6d7b83" fontSize="8" textAnchor="end" fontFamily="monospace">11</text>
                         <text x="36" y="106" fill="#6d7b83" fontSize="8" textAnchor="end" fontFamily="monospace">8</text>
 
+                        {/* Subtle horizontal jitter/dodge: Czytanie = -6px (89, 239), Testowanie = +6px (101, 251) */}
                         {/* 95% CI Error bars */}
-                        {/* Czytanie, Krótki: M = 8 (y = 102) -> 88 to 116 (#344b57 CRIDM slate) */}
-                        <line x1="95" y1="88" x2="95" y2="116" stroke="#344b57" strokeWidth="1.6" />
-                        <line x1="90" y1="88" x2="100" y2="88" stroke="#344b57" strokeWidth="1.6" />
-                        <line x1="90" y1="116" x2="100" y2="116" stroke="#344b57" strokeWidth="1.6" />
+                        {/* Czytanie, Krótki: M = 8 (x = 89, y = 102) -> 88 to 116 (#344b57 CRIDM slate) */}
+                        <line x1="89" y1="88" x2="89" y2="116" stroke="#344b57" strokeWidth="1.6" />
+                        <line x1="84" y1="88" x2="94" y2="88" stroke="#344b57" strokeWidth="1.6" />
+                        <line x1="84" y1="116" x2="94" y2="116" stroke="#344b57" strokeWidth="1.6" />
 
-                        {/* Czytanie, Długi: M = 14 (y = 18) -> 4 to 32 */}
-                        <line x1="245" y1="4" x2="245" y2="32" stroke="#344b57" strokeWidth="1.6" />
-                        <line x1="240" y1="4" x2="250" y2="4" stroke="#344b57" strokeWidth="1.6" />
-                        <line x1="240" y1="32" x2="250" y2="32" stroke="#344b57" strokeWidth="1.6" />
+                        {/* Czytanie, Długi: M = 14 (x = 239, y = 18) -> 4 to 32 */}
+                        <line x1="239" y1="4" x2="239" y2="32" stroke="#344b57" strokeWidth="1.6" />
+                        <line x1="234" y1="4" x2="244" y2="4" stroke="#344b57" strokeWidth="1.6" />
+                        <line x1="234" y1="32" x2="244" y2="32" stroke="#344b57" strokeWidth="1.6" />
 
-                        {/* Testowanie, Krótki: M = 13 (y = 32) -> 18 to 46 (#ef9421 CRIDM orange) */}
-                        <line x1="95" y1="18" x2="95" y2="46" stroke="#ef9421" strokeWidth="1.6" />
-                        <line x1="90" y1="18" x2="100" y2="18" stroke="#ef9421" strokeWidth="1.6" />
-                        <line x1="90" y1="46" x2="100" y2="46" stroke="#ef9421" strokeWidth="1.6" />
+                        {/* Testowanie, Krótki: M = 13 (x = 101, y = 32) -> 18 to 46 (#ef9421 CRIDM orange) */}
+                        <line x1="101" y1="18" x2="101" y2="46" stroke="#ef9421" strokeWidth="1.6" />
+                        <line x1="96" y1="18" x2="106" y2="18" stroke="#ef9421" strokeWidth="1.6" />
+                        <line x1="96" y1="46" x2="106" y2="46" stroke="#ef9421" strokeWidth="1.6" />
 
-                        {/* Testowanie, Długi: M = 13 (y = 32) -> 18 to 46 */}
-                        <line x1="245" y1="18" x2="245" y2="46" stroke="#ef9421" strokeWidth="1.6" />
-                        <line x1="240" y1="18" x2="250" y2="18" stroke="#ef9421" strokeWidth="1.6" />
-                        <line x1="240" y1="46" x2="250" y2="46" stroke="#ef9421" strokeWidth="1.6" />
+                        {/* Testowanie, Długi: M = 13 (x = 251, y = 32) -> 18 to 46 */}
+                        <line x1="251" y1="18" x2="251" y2="46" stroke="#ef9421" strokeWidth="1.6" />
+                        <line x1="246" y1="18" x2="256" y2="18" stroke="#ef9421" strokeWidth="1.6" />
+                        <line x1="246" y1="46" x2="256" y2="46" stroke="#ef9421" strokeWidth="1.6" />
 
                         {/* Line: Czytanie (8 -> 14) */}
-                        <line x1="95" y1="102" x2="245" y2="18" stroke="#344b57" strokeWidth="2.2" />
-                        <circle cx="95" cy="102" r="4" fill="#344b57" />
-                        <text x="95" y="126" fill="#344b57" fontSize="8.5" textAnchor="middle" fontWeight="bold">M = 8,00</text>
+                        <line x1="89" y1="102" x2="239" y2="18" stroke="#344b57" strokeWidth="2.2" />
+                        <circle cx="89" cy="102" r="4" fill="#344b57" />
+                        <text x="89" y="126" fill="#344b57" fontSize="8.5" textAnchor="middle" fontWeight="bold">M = 8,00</text>
 
-                        <circle cx="245" cy="18" r="4" fill="#344b57" />
-                        <text x="245" y="12" fill="#344b57" fontSize="8.5" textAnchor="middle" fontWeight="bold">M = 14,00</text>
+                        <circle cx="239" cy="18" r="4" fill="#344b57" />
+                        <text x="230" y="16" fill="#344b57" fontSize="8.5" textAnchor="end" fontWeight="bold">M = 14,00</text>
 
                         {/* Line: Testowanie (13 -> 13) */}
-                        <line x1="95" y1="32" x2="245" y2="32" stroke="#ef9421" strokeWidth="2.2" />
-                        <circle cx="95" cy="32" r="4" fill="#ef9421" />
-                        <text x="95" y="25" fill="#9a5508" fontSize="8.5" textAnchor="middle" fontWeight="bold">M = 13,00</text>
+                        <line x1="101" y1="32" x2="251" y2="32" stroke="#ef9421" strokeWidth="2.2" />
+                        <circle cx="101" cy="32" r="4" fill="#ef9421" />
+                        <text x="110" y="29" fill="#9a5508" fontSize="8.5" textAnchor="start" fontWeight="bold">M = 13,00</text>
 
-                        <circle cx="245" cy="32" r="4" fill="#ef9421" />
-                        <text x="245" y="25" fill="#9a5508" fontSize="8.5" textAnchor="middle" fontWeight="bold">M = 13,00</text>
+                        <circle cx="251" cy="32" r="4" fill="#ef9421" />
+                        <text x="260" y="35" fill="#9a5508" fontSize="8.5" textAnchor="start" fontWeight="bold">M = 13,00</text>
 
-                        <text x="95" y="136" fill="#5a6c77" fontSize="9" textAnchor="middle" fontWeight="700">Krótki sen</text>
-                        <text x="245" y="136" fill="#5a6c77" fontSize="9" textAnchor="middle" fontWeight="700">Długi sen</text>
+                        <text x="95" y="137" fill="#5a6c77" fontSize="9" textAnchor="middle" fontWeight="700">Krótki sen</text>
+                        <text x="245" y="137" fill="#5a6c77" fontSize="9" textAnchor="middle" fontWeight="700">Długi sen</text>
                       </svg>
                     </div>
 
