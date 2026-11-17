@@ -1,0 +1,6 @@
+{
+  "name": "ANOVA 2×2 - Interaktywne Materiały Dydaktyczne",
+  "description": "Interaktywny zestaw dydaktyczny na zajęcia ze statystyki: dwuczynnikowa ANOVA 2x2 w planie międzygrupowym (strategia uczenia się × sen), symulator interakcji, wzory krok po kroku i raport APA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
